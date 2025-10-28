@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Simple Chat Room</title>
+</head>
+<body>
+  <div>
+    <input id="username" placeholder="Your name" />
+    <input id="room" placeholder="Room" value="global"/>
+    <button onclick="connect()">Connect</button>
+    <button onclick="disconnect()">Disconnect</button>
+  </div>
+
+  <div id="chat" style="height:300px; overflow:auto; border:1px solid #ccc; margin-top:10px;"></div>
+
+  <input id="message" placeholder="Type message" />
+  <button onclick="sendMessage()">Send</button>
+
+  <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+  <script>
+    let stompClient = null;
+
+    function connect() {
+      const socket = new SockJS('/ws');
+      stompClient = Stomp.over(socket);
+      stompClient.connect({}, () => {
+        const room = document.getElementById('room').value || 'global';
+        stompClient.subscribe('/topic/public', function(msg) {
+          const body = JSON.parse(msg.body);
+          showMessage(body);
+        });
+
+        // load history via REST
+        fetch('/api/history/' + room)
+          .then(r => r.json())
+          .then(list => list.forEach(showMessage));
+      });
+    }
+
+    function disconnect() {
+      if (stompClient !== null) {
+        stompClient.disconnect();
+      }
+    }
+
+    function sendMessage() {
+      const name = document.getElementById('username').value || 'Anonymous';
+      const room = document.getElementById('room').value || 'global';
+      const content = document.getElementById('message').value;
+      if (!content) return;
+      const payload = { sender: name, content, room };
+      stompClient.send('/app/chat.send', {}, JSON.stringify(payload));
+      document.getElementById('message').value = '';
+    }
+
+    function showMessage(msg) {
+      const chat = document.getElementById('chat');
+      const time = new Date(msg.timestamp).toLocaleTimeString();
+      const el = document.createElement('div');
+      el.textContent = `[${time}] ${msg.sender}: ${msg.content}`;
+      chat.appendChild(el);
+      chat.scrollTop = chat.scrollHeight;
+    }
+  </script>
+</body>
+</html>
